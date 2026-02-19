@@ -114,21 +114,21 @@ def create_multiset_docx(data, output_path):
 
         # Table for Documents (STNK, Pajak, KIR)
         # Layout: 
-        # Row 1: STNK (Left), Pajak (Right)
-        # Row 2: KIR Kertas (Left), KIR Kartu (Right)
+        # Row 1: STNK (Full Width)
+        # Row 2: Pajak (Full Width)
+        # Row 3: KIR Kertas (Left), KIR Kartu (Right)
         
-        table = doc.add_table(rows=2, cols=2)
+        table = doc.add_table(rows=3, cols=2)
         table.style = 'Table Grid'
         table.autofit = False
-        # Set column widths roughly half page each (minus margins)
-        # Page width 210mm - 25.4mm margin = 184.6mm. Col width ~92mm
         
+        # Set column widths
         for row in table.rows:
             for cell in row.cells:
                 cell.width = Mm(92)
 
         # Helper to fill cell
-        def fill_cell(cell, title, img_key):
+        def fill_cell(cell, title, img_key, max_width_mm=85):
             p = cell.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = p.add_run(title + "\n")
@@ -142,19 +142,29 @@ def create_multiset_docx(data, output_path):
                 img_stream = fetch_image(path)
                 if img_stream:
                     try:
-                        # Add image, constraining width to cell width minus padding
-                        run.add_picture(img_stream, width=Mm(85))
+                        # Add image, constraining width
+                        run.add_picture(img_stream, width=Mm(max_width_mm))
                     except Exception as e:
-                        run.add_text(f"[Error loading image: {e}]")
+                        print(f"Error adding picture {img_key}: {e}")
+                        run.add_text(f"[Error loading image]")
                 else:
                     run.add_text("[Gambar Tidak Ditemukan]")
             else:
                 run.add_text("[Tidak Ada Gambar]")
 
-        fill_cell(table.cell(0, 0), "FOTO STNK", 'stnk')
-        fill_cell(table.cell(0, 1), "FOTO PAJAK", 'tax')
-        fill_cell(table.cell(1, 0), "FOTO KIR (Kertas)", 'kir')
-        fill_cell(table.cell(1, 1), "FOTO KIR (Kartu)", 'kir_card')
+        # Row 1: STNK (Merge cells)
+        cell_stnk = table.cell(0, 0)
+        cell_stnk.merge(table.cell(0, 1))
+        fill_cell(cell_stnk, "FOTO STNK", 'stnk', max_width_mm=170)
+        
+        # Row 2: Pajak (Merge cells)
+        cell_pajak = table.cell(1, 0)
+        cell_pajak.merge(table.cell(1, 1))
+        fill_cell(cell_pajak, "FOTO PAJAK", 'tax', max_width_mm=170)
+        
+        # Row 3: KIR (Split)
+        fill_cell(table.cell(2, 0), "FOTO KIR (Kertas)", 'kir')
+        fill_cell(table.cell(2, 1), "FOTO KIR (Kartu)", 'kir_card')
 
         doc.add_page_break()
 

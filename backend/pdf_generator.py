@@ -259,44 +259,44 @@ def create_multiset_pdf(units, output_path, layout_config=None):
         pdf.ln(2)
         
         # 1. STNK (Full Width)
-        stnk_y = 35
-        full_w = 170
-        full_h = 70
+        stnk_y = 30
+        full_w = 190
+        full_h = 85
         center_x = (210 - full_w) / 2
         
         # Draw STNK
-        pdf.set_xy(center_x, stnk_y - 8)
+        pdf.set_xy(center_x, stnk_y - 6)
         pdf.set_font(main_font, "B", 10)
-        pdf.cell(full_w, 8, "FOTO STNK (SURAT TANDA NOMOR KENDARAAN) :", ln=False, align='L')
+        pdf.cell(full_w, 6, "FOTO STNK (SURAT TANDA NOMOR KENDARAAN) :", ln=False, align='L')
         pdf.rect(center_x, stnk_y, full_w, full_h)
         fit_and_center_image(pdf, unit.get('images', {}).get('stnk'), center_x, stnk_y, full_w, full_h, auto_crop=True)
         
         # 2. PAJAK (Full Width)
-        pajak_y = stnk_y + full_h + 15
-        pdf.set_xy(center_x, pajak_y - 8)
+        pajak_y = stnk_y + full_h + 8
+        pdf.set_xy(center_x, pajak_y - 6)
         pdf.set_font(main_font, "B", 10)
-        pdf.cell(full_w, 8, "FOTO LEMBAR PAJAK :", ln=False, align='L')
+        pdf.cell(full_w, 6, "FOTO LEMBAR PAJAK :", ln=False, align='L')
         pdf.rect(center_x, pajak_y, full_w, full_h)
         fit_and_center_image(pdf, unit.get('images', {}).get('tax'), center_x, pajak_y, full_w, full_h, auto_crop=True)
         
         # 3. KIR (Split: Left = Paper, Right = Card)
-        kir_y = pajak_y + full_h + 15
-        half_w = (full_w - 10) / 2 # 10mm gap
-        kir_h = 60 # Slightly smaller to fit page
+        kir_y = pajak_y + full_h + 10
+        half_w = (full_w - 5) / 2 # 5mm gap
+        kir_h = 65 # Height for KIR
         
         # Left: Paper KIR
         left_x = center_x
-        pdf.set_xy(left_x, kir_y - 8)
+        pdf.set_xy(left_x, kir_y - 6)
         pdf.set_font(main_font, "B", 10)
-        pdf.cell(half_w, 8, "FOTO LEMBAR KIR :", ln=False, align='L')
+        pdf.cell(half_w, 6, "FOTO LEMBAR KIR :", ln=False, align='L')
         pdf.rect(left_x, kir_y, half_w, kir_h)
         fit_and_center_image(pdf, unit.get('images', {}).get('kir'), left_x, kir_y, half_w, kir_h, auto_crop=True)
         
         # Right: Card KIR
-        right_x = left_x + half_w + 10
-        pdf.set_xy(right_x, kir_y - 8)
+        right_x = left_x + half_w + 5
+        pdf.set_xy(right_x, kir_y - 6)
         pdf.set_font(main_font, "B", 10)
-        pdf.cell(half_w, 8, "FOTO KARTU KIR :", ln=False, align='L')
+        pdf.cell(half_w, 6, "FOTO KARTU KIR :", ln=False, align='L')
         pdf.rect(right_x, kir_y, half_w, kir_h)
         fit_and_center_image(pdf, unit.get('images', {}).get('kir_card'), right_x, kir_y, half_w, kir_h, auto_crop=True)
 
