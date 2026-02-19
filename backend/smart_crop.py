@@ -1,9 +1,10 @@
-import cv2
-import numpy as np
-
 try:
+    import cv2
+    import numpy as np
     import imutils
 except ImportError:
+    cv2 = None
+    np = None
     imutils = None
 
 # --- FUNGSI MATEMATIKA UNTUK MELURUSKAN SUDUT ---
