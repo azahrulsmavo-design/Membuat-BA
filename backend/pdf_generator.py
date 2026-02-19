@@ -45,6 +45,9 @@ def fetch_drive_image(url):
             return None 
 
         session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
 
         # --- OPTIMIZATION: Try Thumbnail API First (sz=s1000) ---
         thumbnail_url = f'https://drive.google.com/thumbnail?id={file_id}&sz=s1000'
@@ -54,7 +57,7 @@ def fetch_drive_image(url):
         try:
             # Short timeout for thumbnail
             # Note: We now catch ALL exceptions to ensure fallback runs
-            thumb_resp = session.get(thumbnail_url, timeout=5, verify=False)
+            thumb_resp = session.get(thumbnail_url, timeout=10, verify=False)
             
             # Google sometimes returns 200 OK but with an HTML error page or empty body
             # We strictly check Content-Type
@@ -69,7 +72,8 @@ def fetch_drive_image(url):
 
         # --- FALLBACK: Use Original Download URL ---
         download_url = f'https://drive.google.com/uc?export=download&id={file_id}'
-        response = session.get(download_url, stream=True, timeout=15, verify=False)
+        # Increase timeout for slow connections
+        response = session.get(download_url, stream=True, timeout=45, verify=False)
         
         # Helper to check for confirmation token
         def get_confirm_token(response):
