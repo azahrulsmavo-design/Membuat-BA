@@ -5,3 +5,6 @@ ultralytics
 opencv-python
 fpdf2
 python-docx
+requests
+Pillow
+imutils

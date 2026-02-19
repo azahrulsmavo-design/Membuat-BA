@@ -8,9 +8,10 @@ from PIL import Image
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+from smart_crop import smart_doc_crop
+
 class MultiSetPDF(FPDF):
     def header(self):
-        # Optional: Add logo or header text
         pass
 
     def footer(self):
@@ -28,7 +29,6 @@ def fetch_drive_image(url):
 
     try:
         # Regex to extract File ID
-        # Matches: id=XXXX or /d/XXXX
         match_id = re.search(r'id=([a-zA-Z0-9_-]+)', url)
         match_d = re.search(r'/d/([a-zA-Z0-9_-]+)', url)
 
@@ -39,36 +39,80 @@ def fetch_drive_image(url):
             file_id = match_d.group(1)
 
         if not file_id:
-            return None # Not a drive link
+            return None 
 
-        # Direct download URL
-        download_url = f'https://drive.google.com/uc?export=download&id={file_id}'
-        
-        # Download with session to handle cookies/tokens
+        if not file_id:
+            return None 
+
         session = requests.Session()
-        # Disable SSL verify for corporate networks
+
+        # --- OPTIMIZATION: Try Thumbnail API First (sz=s1000) ---
+        thumbnail_url = f'https://drive.google.com/thumbnail?id={file_id}&sz=s1000'
+        # console.log equivalent for python backend
+        print(f"INFO: Trying thumbnail for {file_id}")
+        
+        try:
+            # Short timeout for thumbnail
+            # Note: We now catch ALL exceptions to ensure fallback runs
+            thumb_resp = session.get(thumbnail_url, timeout=5, verify=False)
+            
+            # Google sometimes returns 200 OK but with an HTML error page or empty body
+            # We strictly check Content-Type
+            ct = thumb_resp.headers.get('Content-Type', '')
+            if thumb_resp.status_code == 200 and ct.startswith('image/'):
+                 return io.BytesIO(thumb_resp.content)
+            else:
+                 print(f"WARN: Thumbnail fetch failed (Status: {thumb_resp.status_code}, Type: {ct}). Falling back to original.")
+        except Exception as e:
+            # This catch block ensures we proceed to fallback even if thumbnail request explodes
+            print(f"WARN: Thumbnail API error ({e}). Falling back to original.")
+
+        # --- FALLBACK: Use Original Download URL ---
+        download_url = f'https://drive.google.com/uc?export=download&id={file_id}'
         response = session.get(download_url, stream=True, timeout=15, verify=False)
         
-        # Check for virus scan warning (Google Drive Large File)
-        token = None
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                token = value
-                break
-        
+        # Helper to check for confirmation token
+        def get_confirm_token(response):
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    return value
+            return None
+
+        token = get_confirm_token(response)
+
         if token:
             params = {'id': file_id, 'confirm': token}
             response = session.get(download_url, params=params, stream=True, timeout=15, verify=False)
             
+        # Check Content-Type
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' in content_type:
+             # Case: Virus scan warning might be in the HTML body (not cookies)
+             # Or it's a login page
+             content_preview = response.content[:200].decode('utf-8', errors='ignore')
+             print(f"DEBUG: HTML response for {url}: {content_preview}")
+             
+             # Fallback: Try to find 'confirm=XXXX' in the HTML link
+             # Google sometimes puts a link like <a href="/uc?export=download&amp;id=XXX&amp;confirm=Op9R">
+             match_confirm = re.search(r'confirm=([a-zA-Z0-9_-]+)', response.text)
+             if match_confirm:
+                 confirm_code = match_confirm.group(1)
+                 params = {'id': file_id, 'confirm': confirm_code}
+                 response = session.get(download_url, params=params, stream=True, timeout=15, verify=False)
+                 content_type = response.headers.get('Content-Type', '')
+
+        if 'image' not in content_type and 'application/octet-stream' not in content_type:
+            print(f"Warning: URL {url} returned Content-Type: {content_type}")
+            # We continue anyway, as sometimes headers are wrong, but PIL will fail if it's not bytes.
+            
         response.raise_for_status()
-        
         return io.BytesIO(response.content)
 
     except Exception as e:
         print(f"Failed to download drive image {url}: {e}")
         return None
 
-def fit_and_center_image(pdf, img_path, x, y, w, h):
+def fit_and_center_image(pdf, img_path, x, y, w, h, auto_crop=False):
     """
     Fits an image into a box defined by x, y, w, h while maintaining aspect ratio
     and centering it. Handles local paths and Google Drive URLs.
@@ -91,6 +135,17 @@ def fit_and_center_image(pdf, img_path, x, y, w, h):
                 image_source = drive_img_data
             else:
                  raise Exception("Failed to download or invalid Drive link")
+
+        # --- SMART CROP LOGIC ---
+        if auto_crop:
+            # If it's a file path, read bytes first
+            if isinstance(image_source, str):
+                with open(image_source, 'rb') as f:
+                    import io
+                    image_source = io.BytesIO(f.read())
+            
+            # Apply Smart Crop
+            image_source = smart_doc_crop(image_source)
 
         # Get image dimensions using Pillow
         # Image.open handles both file paths and file-like objects (BytesIO)
@@ -129,12 +184,31 @@ def create_multiset_pdf(units, output_path, layout_config=None):
     pdf = MultiSetPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # Add Calibri Font
+    # Add Calibri Font (Try Windows path first, else fallback)
+    main_font = "Helvetica"
     try:
-        pdf.add_font("Calibri", "", r"C:\Windows\Fonts\calibri.ttf", uni=True)
-        pdf.add_font("Calibri", "B", r"C:\Windows\Fonts\calibrib.ttf", uni=True)
-        pdf.add_font("Calibri", "I", r"C:\Windows\Fonts\calibrii.ttf", uni=True)
-        main_font = "Calibri"
+        font_paths = {
+            "": ["calibri.ttf", r"C:\Windows\Fonts\calibri.ttf"],
+            "B": ["calibrib.ttf", r"C:\Windows\Fonts\calibrib.ttf"],
+            "I": ["calibrii.ttf", r"C:\Windows\Fonts\calibrii.ttf"]
+        }
+        
+        success_count = 0
+        for style, paths in font_paths.items():
+            found = False
+            for path in paths:
+                if os.path.exists(path):
+                    pdf.add_font("Calibri", style, path, uni=True)
+                    found = True
+                    break
+            if found:
+                success_count += 1
+                
+        if success_count == 3:
+            main_font = "Calibri"
+        else:
+             print("Warning: Calibri font not fully found. Falling back to Helvetica.")
+             
     except Exception as e:
         print(f"Warning: Could not load Calibri font, falling back to Helvetica. Error: {e}")
         main_font = "Helvetica"
@@ -191,7 +265,7 @@ def create_multiset_pdf(units, output_path, layout_config=None):
         pdf.set_font(main_font, "B", 10)
         pdf.cell(full_w, 8, "FOTO STNK (SURAT TANDA NOMOR KENDARAAN) :", ln=False, align='L')
         pdf.rect(center_x, stnk_y, full_w, full_h)
-        fit_and_center_image(pdf, unit.get('images', {}).get('stnk'), center_x, stnk_y, full_w, full_h)
+        fit_and_center_image(pdf, unit.get('images', {}).get('stnk'), center_x, stnk_y, full_w, full_h, auto_crop=True)
         
         # 2. PAJAK (Full Width)
         pajak_y = stnk_y + full_h + 15
@@ -199,7 +273,7 @@ def create_multiset_pdf(units, output_path, layout_config=None):
         pdf.set_font(main_font, "B", 10)
         pdf.cell(full_w, 8, "FOTO LEMBAR PAJAK :", ln=False, align='L')
         pdf.rect(center_x, pajak_y, full_w, full_h)
-        fit_and_center_image(pdf, unit.get('images', {}).get('tax'), center_x, pajak_y, full_w, full_h)
+        fit_and_center_image(pdf, unit.get('images', {}).get('tax'), center_x, pajak_y, full_w, full_h, auto_crop=True)
         
         # 3. KIR (Split: Left = Paper, Right = Card)
         kir_y = pajak_y + full_h + 15
@@ -212,7 +286,7 @@ def create_multiset_pdf(units, output_path, layout_config=None):
         pdf.set_font(main_font, "B", 10)
         pdf.cell(half_w, 8, "FOTO LEMBAR KIR :", ln=False, align='L')
         pdf.rect(left_x, kir_y, half_w, kir_h)
-        fit_and_center_image(pdf, unit.get('images', {}).get('kir'), left_x, kir_y, half_w, kir_h)
+        fit_and_center_image(pdf, unit.get('images', {}).get('kir'), left_x, kir_y, half_w, kir_h, auto_crop=True)
         
         # Right: Card KIR
         right_x = left_x + half_w + 10
@@ -220,7 +294,7 @@ def create_multiset_pdf(units, output_path, layout_config=None):
         pdf.set_font(main_font, "B", 10)
         pdf.cell(half_w, 8, "FOTO KARTU KIR :", ln=False, align='L')
         pdf.rect(right_x, kir_y, half_w, kir_h)
-        fit_and_center_image(pdf, unit.get('images', {}).get('kir_card'), right_x, kir_y, half_w, kir_h)
+        fit_and_center_image(pdf, unit.get('images', {}).get('kir_card'), right_x, kir_y, half_w, kir_h, auto_crop=True)
 
 
         # ==========================================

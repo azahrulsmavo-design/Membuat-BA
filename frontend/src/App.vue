@@ -222,13 +222,14 @@ const downloadProgress = ref({ current: 0, total: 0 });
 const currentDownloadingTarget = ref(null); // { uIdx, key }
 
 // Auto-switch unit when downloading
-watch(currentDownloadingTarget, (newTarget) => {
-    if (newTarget && isDownloadingAll.value) {
-        if (newTarget.uIdx !== activeIndex.value) {
-            activeIndex.value = newTarget.uIdx;
-        }
-    }
-});
+// Auto-switch unit when downloading - DISABLED by user request
+// watch(currentDownloadingTarget, (newTarget) => {
+//     if (newTarget && isDownloadingAll.value) {
+//         if (newTarget.uIdx !== activeIndex.value) {
+//             activeIndex.value = newTarget.uIdx;
+//         }
+//     }
+// });
 
 const deleteAllUnits = () => {
     if (confirm("⚠️ YAKIN HAPUS SEMUA UNIT? Data tidak bisa dikembalikan.")) {

@@ -4,6 +4,8 @@ import axios from 'axios';
 import 'vue-cropper/dist/index.css'
 import { VueCropper } from "vue-cropper";
 
+const API_BASE_URL = `http://${window.location.hostname}:8000`;
+
 const props = defineProps({
   label: String,
   modelValue: [String, Object, File],
@@ -67,7 +69,7 @@ const openCropper = async () => {
             // Note: We MUST use the original Drive URL from modelValue, not the placeholder
             const driveUrl = props.modelValue.dataUrl;
             
-            const response = await axios.get(`http://10.253.64.122:8000/proxy-image`, {
+            const response = await axios.get(`${API_BASE_URL}/proxy-image`, {
                 params: { url: driveUrl }, 
                 responseType: 'blob'
             });
@@ -107,7 +109,7 @@ const autoCrop = async () => {
   formData.append('file', props.modelValue.file);
   
   try {
-    const response = await axios.post('http://10.253.64.122:8000/crop', formData, {
+    const response = await axios.post(`${API_BASE_URL}/crop`, formData, {
       responseType: 'blob'
     });
     
@@ -174,7 +176,7 @@ const saveUrl = async (urlOverride) => {
     if (driveUrl.includes('drive.google.com')) {
         isProcessing.value = true;
         try {
-            const response = await axios.get('http://10.253.64.122:8000/proxy-image', {
+            const response = await axios.get(`${API_BASE_URL}/proxy-image`, {
                 params: { url: driveUrl }, 
                 responseType: 'blob'
             });

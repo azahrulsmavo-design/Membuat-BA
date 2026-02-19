@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Output files
+*.pdf
+*.docx
+
+# Environment
+venv/
+env/
+.env
+
+# NodeJS
+node_modules/
+dist/
+npm-debug.log*
+
+# Temp uploads
+backend/temp_uploads/
+backend/venv/
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
