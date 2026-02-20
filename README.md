@@ -90,7 +90,7 @@ sss
 ### 2. Mengupload Gambar
 -   Klik kotak gambar (STNK, Pajak, Fisik Kendaraan, dll) untuk mengupload file.
 -   Jika menggunakan link Google Drive, paste link tersebut saat diminta. Gambar akan otomatis didownload dan di-crop (khusus dokumen).
--   Fitur "Download All" (tombol hijau di atas) akan mendownload semua gambar dari link Google Drive yang ada di semua unit secara otomatis.
+-   Fitur "Download All" (tombol hijau di atas) akan mendownload semua gambar dari link ..Google Drive yang ada di semua unit secara otomatis.
 
 ### 3. Generate Laporan
 -   Klik tombol **Preview** untuk melihat hasil sementara.

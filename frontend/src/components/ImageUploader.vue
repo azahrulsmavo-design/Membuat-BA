@@ -16,6 +16,7 @@ const emit = defineEmits(['update:modelValue']);
 
 const fileInput = ref(null);
 const imageUrl = ref(null);
+const originalImageUrl = ref(null); // Store original
 const isProcessing = ref(false);
 const showCropper = ref(false);
 const cropper = ref(null);
@@ -44,6 +45,13 @@ const processFile = (file) => {
   const reader = new FileReader();
   reader.onload = (e) => {
     imageUrl.value = e.target.result;
+    // If not a crop result (name doesn't start with cropped_), set as original
+    // But better: processFile is called by autoCrop too.
+    // Let's explicitly separate "New Upload" vs "Crop Result"
+    // For now, if we don't have an original, set it.
+    if (!originalImageUrl.value) {
+        originalImageUrl.value = e.target.result;
+    }
     emit('update:modelValue', { file, dataUrl: e.target.result });
   };
   reader.readAsDataURL(file);
@@ -87,9 +95,11 @@ const openCropper = async () => {
 }
 
 const saveCrop = () => {
+    // getCropBlob(callback, type, quality)
     cropper.value.getCropBlob((blob) => {
         // Create a unique filename
         const filename = "cropped_" + (new Date().getTime()) + ".jpg";
+        // Create file from blob
         const newFile = new File([blob], filename, { type: "image/jpeg" });
         processFile(newFile);
         showCropper.value = false;
@@ -98,7 +108,7 @@ const saveCrop = () => {
         if (cropperImg.value.startsWith('blob:')) {
             URL.revokeObjectURL(cropperImg.value);
         }
-    });
+    }, 'image/jpeg', 1.0); // 1.0 = Max Quality
 }
 
 const autoCrop = async () => {
@@ -162,9 +172,22 @@ const toggleUrlInput = () => {
 
 const removeImage = () => {
     imageUrl.value = null;
+    originalImageUrl.value = null;
     fileInput.value.value = ''; // Reset input
     emit('update:modelValue', null);
 };
+
+const restoreOriginal = () => {
+    if (originalImageUrl.value) {
+        imageUrl.value = originalImageUrl.value;
+        // Verify if original was a file or url?
+        // If it was a file, we might have lost the File object if we didn't save it.
+        // But for display, dataUrl is enough.
+        // For submission, we might need to handle it.
+        // If we only have dataUrl, we emit that.
+        emit('update:modelValue', { file: null, dataUrl: originalImageUrl.value });
+    }
+}
 
 const saveUrl = async (urlOverride) => {
     const driveUrl = urlOverride || urlInput.value.trim();
@@ -257,6 +280,11 @@ const saveUrl = async (urlOverride) => {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
          </button>
          <button @click="openCropper" class="flex-1 min-w-[40px] text-xs bg-yellow-500 text-white hover:bg-yellow-600 px-2 py-1.5 rounded shadow-sm font-bold">Crop</button>
+         
+         <button v-if="imageUrl !== originalImageUrl && originalImageUrl" @click="restoreOriginal" class="flex-1 min-w-[40px] text-xs bg-gray-500 text-white hover:bg-gray-600 px-2 py-1.5 rounded shadow-sm font-bold" title="Restore Original">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+         </button>
+
          <button @click="removeImage" class="flex-1 min-w-[40px] text-xs bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 px-2 py-1.5 rounded shadow-sm font-bold" title="Hapus">Remove</button>
       </div>
     </div>
@@ -320,6 +348,7 @@ const saveUrl = async (urlOverride) => {
                     outputType="jpeg"
                     :autoCrop="true"
                     :fixed="false"
+                    :full="true"
                 ></vue-cropper>
             </div>
             <div class="p-4 border-t flex justify-between items-center bg-white">

@@ -99,7 +99,7 @@ def smart_doc_crop(image_bytes):
         warped = four_point_transform(orig, screenCnt.reshape(4, 2) * ratio)
         
         # 6. Encode kembali ke bytes
-        success, encoded_img = cv2.imencode('.jpg', warped)
+        success, encoded_img = cv2.imencode('.jpg', warped, [cv2.IMWRITE_JPEG_QUALITY, 100])
         if success:
             import io
             return io.BytesIO(encoded_img.tobytes())

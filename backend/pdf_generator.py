@@ -49,8 +49,8 @@ def fetch_drive_image(url):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
 
-        # --- OPTIMIZATION: Try Thumbnail API First (sz=s1000) ---
-        thumbnail_url = f'https://drive.google.com/thumbnail?id={file_id}&sz=s1000'
+        # --- OPTIMIZATION: Try Thumbnail API First (sz=s3000) ---
+        thumbnail_url = f'https://drive.google.com/thumbnail?id={file_id}&sz=s3000'
         # console.log equivalent for python backend
         print(f"INFO: Trying thumbnail for {file_id}")
         

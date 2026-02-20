@@ -55,7 +55,7 @@ def ai_smart_crop(image_path, output_path):
             cropped_img = img[y1:y2, x1:x2]
             
             # Save
-            cv2.imwrite(output_path, cropped_img)
+            cv2.imwrite(output_path, cropped_img, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
             return True
             
     # Fallback: copy original if no detection

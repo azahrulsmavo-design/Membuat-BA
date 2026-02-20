@@ -7,6 +7,7 @@ from docx.oxml import OxmlElement
 import requests
 from io import BytesIO
 import os
+from pdf_generator import fetch_drive_image
 
 def fetch_image(path_or_url):
     """
@@ -19,10 +20,13 @@ def fetch_image(path_or_url):
     try:
         # Check if it's a URL
         if path_or_url.startswith('http'):
-            # Specific handling for Google Drive is done in the frontend/proxy, 
-            # but if a direct URL (e.g., from proxy) is passed, we handle it here.
-            # Ideally, the frontend sends base64 or a local path if it was already downloaded.
-            # But if we get a raw URL, try to fetch it.
+            # Use the robust Drive fetcher from pdf_generator if it's a drive link or general url
+            # The fetch_drive_image function handles generic URLs too if they aren't drive (conceptually, looking at it, it explicitly checks drive patterns, but let's verify)
+            # Actually pdf_generator.fetch_drive_image returns None if not drive.
+            # So we should check.
+            
+            if 'drive.google.com' in path_or_url:
+                return fetch_drive_image(path_or_url)
             
             # Disable SSL verify for internal consistency with pdf_generator
             response = requests.get(path_or_url, verify=False, timeout=10)
@@ -73,13 +77,14 @@ def create_multiset_docx(data, output_path):
     doc = Document()
     
     # Set Narrow Margins (1.27 cm)
+    # Set Narrow Margins (1.0 cm) to match PDF 190mm content width logic
     section = doc.sections[0]
     section.page_height = Mm(297)
     section.page_width = Mm(210)
-    section.left_margin = Mm(12.7)
-    section.right_margin = Mm(12.7)
-    section.top_margin = Mm(12.7)
-    section.bottom_margin = Mm(12.7)
+    section.left_margin = Mm(10)
+    section.right_margin = Mm(10)
+    section.top_margin = Mm(10)
+    section.bottom_margin = Mm(10)
 
     style = doc.styles['Normal']
     font = style.font
@@ -97,21 +102,25 @@ def create_multiset_docx(data, output_path):
 
         # --- PAGE 1: Check Fisik Dokumen ---
         
-        # Header
+        # Header - Matches PDF: "BU : {bu} - {location} - {nopol}"
+        header_title = f"BU : {bu} - {lokasi} - {nopol}".upper()
+        
         p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run(f"BERITA ACARA CEK FISIK KENDARAAN\nUNIT BISNIS: {bu}\nLOKASI: {lokasi}")
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        run = p.add_run(header_title)
         run.bold = True
-        run.font.size = Pt(14)
+        run.font.size = Pt(11) # PDF uses 11
         
-        p = doc.add_paragraph(f"Nomor Polisi: {nopol}")
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.runs[0].bold = True
+        # Space after header
+        doc.add_paragraph() 
+
+        # doc.add_heading('1. DOKUMEN KENDARAAN', level=2) # Removed to match PDF clean look where visual boxes dominate, or keep if user wants headings?
+        # PDF code has: pdf.cell(..., "FOTO STNK...", ...) inside the box logic.
+        # It DOES NOT have a main heading "1. DOKUMEN KENDARAAN".
+        # It just starts.
         
-        doc.add_paragraph("-" * 80).alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-        doc.add_heading('1. DOKUMEN KENDARAAN', level=2)
-
+        # But we need some separation. The PDF has "BU : ..." then "FOTO STNK (SURAT TANDA NOMOR KENDARAAN) :"
+        
         # Table for Documents (STNK, Pajak, KIR)
         # Layout: 
         # Row 1: STNK (Full Width)
@@ -122,10 +131,11 @@ def create_multiset_docx(data, output_path):
         table.style = 'Table Grid'
         table.autofit = False
         
-        # Set column widths
+        # Set column widths (Total 190mm)
+        # Col 1: 95mm, Col 2: 95mm (roughly, gap included in cell padding usually)
         for row in table.rows:
             for cell in row.cells:
-                cell.width = Mm(92)
+                cell.width = Mm(95)
 
         # Helper to fill cell
         def fill_cell(cell, title, img_key, max_width_mm=85):
@@ -155,29 +165,34 @@ def create_multiset_docx(data, output_path):
         # Row 1: STNK (Merge cells)
         cell_stnk = table.cell(0, 0)
         cell_stnk.merge(table.cell(0, 1))
-        fill_cell(cell_stnk, "FOTO STNK", 'stnk', max_width_mm=170)
+        # Height constraint approx 85mm
+        fill_cell(cell_stnk, "FOTO STNK (SURAT TANDA NOMOR KENDARAAN) :", 'stnk', max_width_mm=160)
         
         # Row 2: Pajak (Merge cells)
         cell_pajak = table.cell(1, 0)
         cell_pajak.merge(table.cell(1, 1))
-        fill_cell(cell_pajak, "FOTO PAJAK", 'tax', max_width_mm=170)
+        fill_cell(cell_pajak, "FOTO LEMBAR PAJAK :", 'tax', max_width_mm=160)
         
         # Row 3: KIR (Split)
-        fill_cell(table.cell(2, 0), "FOTO KIR (Kertas)", 'kir')
-        fill_cell(table.cell(2, 1), "FOTO KIR (Kartu)", 'kir_card')
+        # Height approx 65mm
+        fill_cell(table.cell(2, 0), "FOTO LEMBAR KIR :", 'kir', max_width_mm=85)
+        fill_cell(table.cell(2, 1), "FOTO KARTU KIR :", 'kir_card', max_width_mm=85)
 
         doc.add_page_break()
 
         # --- PAGE 2: Foto Fisik Kendaraan ---
         
         # Header (Repeated for context)
+        # pdf_generator page 2 has header too
         p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run(f"FOTO FISIK KENDARAAN - {nopol}")
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        run = p.add_run(header_title)
         run.bold = True
-        run.font.size = Pt(14)
+        run.font.size = Pt(11)
         
-        doc.add_heading('2. KONDISI FISIK', level=2)
+        doc.add_paragraph() # Spacer
+        
+        # doc.add_heading('2. KONDISI FISIK', level=2) # Removed to match PDF
 
         # Table for Physical Photos
         # Row 1: Depan, Belakang
@@ -186,10 +201,10 @@ def create_multiset_docx(data, output_path):
         table_phys = doc.add_table(rows=2, cols=2)
         table_phys.style = 'Table Grid'
         
-        fill_cell(table_phys.cell(0, 0), "TAMPAK DEPAN", 'front')
-        fill_cell(table_phys.cell(0, 1), "TAMPAK BELAKANG", 'back')
-        fill_cell(table_phys.cell(1, 0), "TAMPAK KANAN", 'right')
-        fill_cell(table_phys.cell(1, 1), "TAMPAK KIRI", 'left')
+        fill_cell(table_phys.cell(0, 0), "TAMPAK DEPAN", 'front', max_width_mm=85)
+        fill_cell(table_phys.cell(0, 1), "TAMPAK BELAKANG", 'back', max_width_mm=85)
+        fill_cell(table_phys.cell(1, 0), "TAMPAK SAMPING KANAN", 'right', max_width_mm=85)
+        fill_cell(table_phys.cell(1, 1), "TAMPAK SAMPING KIRI", 'left', max_width_mm=85)
 
         doc.add_page_break()
 
